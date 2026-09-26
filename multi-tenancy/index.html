@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Four ways to share one GPU</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#eef1f4; --panel:#ffffff; --ink:#1b2433; --muted:#5d6878; --line:#c9d1db; --trace:#dde3ea;
+  --copper:#b06a2c; --used:#1f8f7a; --idle:#e3e8ee; --warn:#a65f00; --warn-bg:#fdf1de; --bad:#b83a32; --bad-bg:#fbe6e3;
+  --good-bg:#e2f3ee;
+  --sans:'Barlow', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --display:'Barlow Condensed', 'Arial Narrow', system-ui, sans-serif;
+  color-scheme: light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#10151d; --panel:#171e28; --ink:#e7ecf2; --muted:#98a3b3; --line:#2d3845; --trace:#1b2330;
+    --copper:#d88b4a; --used:#35b89f; --idle:#232c38; --warn:#e5a54d; --warn-bg:#33260f; --bad:#ef6d63; --bad-bg:#3a1b19;
+    --good-bg:#15302a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#10151d; --panel:#171e28; --ink:#e7ecf2; --muted:#98a3b3; --line:#2d3845; --trace:#1b2330;
+  --copper:#d88b4a; --used:#35b89f; --idle:#232c38; --warn:#e5a54d; --warn-bg:#33260f; --bad:#ef6d63; --bad-bg:#3a1b19;
+  --good-bg:#15302a; color-scheme: dark;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{
+  margin:0; background:var(--paper); color:var(--ink); font-family:var(--sans); font-size:16px; line-height:1.5;
+  background-image:linear-gradient(var(--trace) 1px, transparent 1px), linear-gradient(90deg, var(--trace) 1px, transparent 1px);
+  background-size:32px 32px; font-variant-numeric: tabular-nums;
+}
+.wrap{max-width:1180px; margin:0 auto; padding:28px 16px 56px}
+header{max-width:760px; margin-bottom:22px}
+h1{font-family:var(--display); font-weight:700; font-size:clamp(2.4rem, 6vw, 4rem); line-height:.95; margin:0 0 10px; letter-spacing:-.01em}
+.lede{color:var(--muted); font-size:1.08rem; margin:0; max-width:62ch}
+.layout{display:grid; grid-template-columns:330px minmax(0,1fr); gap:18px; align-items:start}
+@media (max-width:900px){ .layout{grid-template-columns:1fr} }
+.panel{background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:16px}
+h2{font-family:var(--display); font-weight:600; font-size:1.35rem; margin:0 0 4px}
+.hint{color:var(--muted); font-size:.9rem; margin:0 0 12px}
+button{font:inherit; color:inherit; cursor:pointer}
+button:focus-visible, input:focus-visible{outline:2px solid var(--used); outline-offset:2px}
+.presets{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px}
+.chip{background:transparent; border:1px solid var(--line); border-radius:999px; padding:4px 11px; font-size:.88rem}
+.chip:hover{border-color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--ink); color:var(--panel); border-color:var(--ink)}
+.tenant{border-top:1px solid var(--line); padding:12px 0 6px}
+.thead{display:flex; align-items:center; gap:8px; margin-bottom:6px}
+.swatch{width:14px; height:14px; border-radius:3px; flex:none}
+.thead b{font-weight:600}
+.burst{margin-left:auto; display:flex; align-items:center; gap:4px; font-size:.86rem; color:var(--muted)}
+.rm{background:none; border:1px solid transparent; border-radius:4px; width:26px; height:26px; color:var(--muted)}
+.rm:hover{border-color:var(--line); color:var(--bad)}
+.slider{display:grid; grid-template-columns:1fr auto; font-size:.9rem; color:var(--muted); margin:2px 0}
+.slider output{color:var(--ink); font-weight:600}
+.slider input{grid-column:1 / -1; width:100%; accent-color:var(--used)}
+.add{width:100%; margin-top:10px; background:transparent; border:1px dashed var(--muted); border-radius:6px; padding:8px}
+.add:disabled{opacity:.45; cursor:not-allowed}
+.modes{display:flex; flex-wrap:wrap; gap:0; border:1px solid var(--ink); border-radius:6px; overflow:hidden; margin-bottom:14px; width:max-content; max-width:100%}
+.mode{background:transparent; border:none; border-right:1px solid var(--ink); padding:8px 16px; font-family:var(--display); font-weight:600; font-size:1.08rem}
+.mode:last-child{border-right:none}
+.mode[aria-selected="true"]{background:var(--ink); color:var(--panel)}
+.stage-top{display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap}
+.play{background:transparent; border:1px solid var(--line); border-radius:6px; padding:6px 12px; font-size:.9rem}
+.promise{font-family:var(--display); font-size:1.3rem; font-weight:500; margin:2px 0 14px; max-width:60ch}
+.gpu{border:3px solid var(--ink); border-radius:10px; padding:12px; background:var(--panel); position:relative}
+.gpu-cap{display:flex; justify-content:space-between; font-size:.84rem; color:var(--muted); margin-bottom:8px; gap:10px; flex-wrap:wrap}
+.die{display:flex; gap:6px; align-items:stretch}
+.grp{display:grid; grid-auto-flow:column; grid-template-rows:repeat(10, minmax(0,1fr)); gap:3px; padding:5px; border-radius:5px; min-width:0}
+.grp.hw{border:3px solid var(--copper); padding-top:22px; position:relative}
+.grp.free{border:2px dashed var(--line); padding-top:22px; position:relative}
+.grp .tag{position:absolute; top:3px; left:6px; right:6px; font-size:.74rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.cell{aspect-ratio:1; border-radius:2px; background:var(--idle); min-width:0}
+.cell.free{background:transparent}
+.timeline{display:flex; align-items:flex-end; gap:3px; height:64px; margin-top:12px}
+.slot{flex:1; height:100%; background:var(--idle); border-radius:2px; position:relative; overflow:hidden}
+.slot i{position:absolute; left:0; right:0; bottom:0}
+.slot.now{outline:2px solid var(--ink); outline-offset:1px}
+.tl-cap{font-size:.8rem; color:var(--muted); margin-top:4px}
+.mem{margin-top:14px}
+.mem-cap{display:flex; justify-content:space-between; font-size:.84rem; color:var(--muted); margin-bottom:4px}
+.membar{display:flex; height:24px; border:1.5px solid var(--ink); border-radius:4px; overflow:hidden; background:var(--idle)}
+.membar span{height:100%; position:relative}
+.membar span + span{box-shadow:inset 1px 0 0 var(--panel)}
+.readouts{display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:10px; margin-top:16px}
+@media (max-width:560px){ .readouts{grid-template-columns:1fr} }
+.ro{border:1px solid var(--line); border-radius:6px; padding:10px 12px; background:var(--panel)}
+.ro .k{font-size:.86rem; color:var(--muted)}
+.ro .v{font-family:var(--display); font-weight:700; font-size:2rem; line-height:1.1}
+.ro .s{font-size:.82rem; color:var(--muted)}
+.iso{display:grid; grid-template-columns:auto auto 1fr; gap:6px 12px; margin-top:16px; font-size:.92rem; align-items:center}
+.lvl{font-weight:600; border-radius:4px; padding:1px 8px; text-align:center; min-width:74px}
+.lvl.Hard{background:var(--good-bg); color:var(--used)}
+.lvl.Soft, .lvl.Partial, .lvl.Limited{background:var(--warn-bg); color:var(--warn)}
+.lvl.None{background:var(--bad-bg); color:var(--bad)}
+.iso .why{color:var(--muted)}
+.risks{margin:16px 0 0; padding:0; list-style:none}
+.risks li{border-left:3px solid var(--warn); padding:4px 10px; margin-bottom:6px; background:var(--warn-bg); border-radius:0 4px 4px 0; font-size:.94rem}
+.risks li.bad{border-color:var(--bad); background:var(--bad-bg)}
+.insight{margin-top:16px; border-left:4px solid var(--copper); padding:4px 0 4px 12px; font-size:1.02rem; max-width:70ch}
+.compare{margin-top:22px}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse; width:100%; min-width:720px; font-size:.92rem}
+th, td{text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top}
+th{font-family:var(--display); font-weight:600; font-size:1rem}
+tr.sel td{background:var(--good-bg)}
+td.num{white-space:nowrap}
+footer{margin-top:28px; color:var(--muted); font-size:.86rem; max-width:80ch}
+.sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Four ways to share one GPU</h1>
+    <p class="lede">Add tenants, then switch how the card is shared. Same workloads, four very different promises: who gets isolation, who gets throughput, and how much of the silicon quietly goes to waste.</p>
+  </header>
+
+  <div class="layout">
+    <aside class="panel" aria-labelledby="tenants-h">
+      <h2 id="tenants-h">Tenants</h2>
+      <p class="hint">Start from a scenario, or tune each workload. Compute is a share of the full GPU.</p>
+      <div class="presets" id="presets" role="group" aria-label="Scenarios"></div>
+      <div id="tenantList"></div>
+      <button class="add" id="addBtn" type="button">Add tenant</button>
+    </aside>
+
+    <main>
+      <section class="panel" aria-labelledby="stage-h">
+        <h2 id="stage-h" class="sr">GPU view</h2>
+        <div class="stage-top">
+          <div class="modes" role="tablist" aria-label="Sharing mode" id="modes"></div>
+          <button class="play" id="playBtn" type="button" aria-pressed="true">Pause bursts</button>
+        </div>
+        <p class="promise" id="promise"></p>
+        <div class="gpu">
+          <div class="gpu-cap"><span id="gpuCap"></span><span>Each square is about 1/70 of the GPU's compute</span></div>
+          <div class="die" id="die"></div>
+          <div id="tlWrap"></div>
+        </div>
+        <div class="mem">
+          <div class="mem-cap"><span>GPU memory, 80 GB</span><span id="memCap"></span></div>
+          <div class="membar" id="membar" role="img"></div>
+        </div>
+        <div class="readouts" id="readouts"></div>
+        <div class="iso" id="iso"></div>
+        <ul class="risks" id="risks"></ul>
+        <p class="insight" id="insight"></p>
+      </section>
+
+      <section class="panel compare" aria-labelledby="cmp-h">
+        <h2 id="cmp-h">Same tenants, every mode</h2>
+        <p class="hint">Live, for the tenants on the left. The highlighted row is the mode you're viewing.</p>
+        <div class="tablewrap"><table id="cmp"></table></div>
+      </section>
+    </main>
+  </div>
+
+  <footer>
+    A simplified teaching model, not a benchmark. MIG shapes follow NVIDIA's publicly documented profiles for an 80 GB-class GPU (1g.10gb to 7g.80gb). Time-slicing and MPS behaviour is approximated from public documentation. Built by Meet Andani for #ZeroToGPU and #GPUtoPlatform.
+  </footer>
+</div>
+
+<script>
+(function(){
+  const GPU_MEM = 80, SLICES = 7, CELLS = 70;
+  const PROFILES = [
+    {name:'1g.10gb', s:1, mem:10}, {name:'2g.20gb', s:2, mem:20}, {name:'3g.40gb', s:3, mem:40},
+    {name:'4g.40gb', s:4, mem:40}, {name:'7g.80gb', s:7, mem:80}
+  ];
+  const COLORS = ['#3f6ea5','#1f8f7a','#b06a2c','#9b4b8f','#6a5acd','#2a8aa8','#8a6d1f'];
+  const PRESETS = {
+    'Mixed team':        [{m:35,c:55,b:false},{m:12,c:20,b:false},{m:8,c:10,b:true},{m:10,c:12,b:false}],
+    'Small inference':   [{m:8,c:12,b:false},{m:6,c:10,b:true},{m:9,c:15,b:false},{m:7,c:8,b:false},{m:5,c:10,b:false}],
+    'Noisy neighbour':   [{m:20,c:30,b:false},{m:15,c:25,b:false},{m:30,c:70,b:true}],
+    'Memory crunch':     [{m:30,c:20,b:false},{m:28,c:20,b:false},{m:25,c:15,b:false},{m:12,c:10,b:false}],
+    'One big job':       [{m:72,c:90,b:false}]
+  };
+  const MODES = [
+    {id:'whole', label:'Whole card'},
+    {id:'ts', label:'Time-slicing'},
+    {id:'mps', label:'MPS'},
+    {id:'mig', label:'MIG'}
+  ];
+  const ISO = {
+    whole:{mem:['Hard','Separate physical card per tenant'], perf:['Hard','Nobody to share with'], fault:['Hard','Nothing is shared']},
+    ts:{mem:['None','No per-tenant memory limit'], perf:['None','Turns get slower as tenants are added'], fault:['None','No fault isolation between replicas']},
+    mps:{mem:['Soft','Per-client limits, enforced in software'], perf:['Soft','Thread-percentage caps, not guarantees'], fault:['Limited','A fatal fault can take down other clients']},
+    mig:{mem:['Hard','Dedicated memory and cache slices'], perf:['Hard','Dedicated compute and bandwidth'], fault:['Hard','Faults stay inside the instance']}
+  };
+  const PROMISE = {
+    whole:'"The whole card is yours. Everyone else waits for their own."',
+    ts:'"You get the whole card, one turn at a time."',
+    mps:'"You run alongside everyone, with a soft cap."',
+    mig:'"You get a fixed slice, guaranteed, even when you only use part of it."'
+  };
+  const INSIGHT = {
+    whole:'Perfect isolation, poor utilization. Great for one big job, wasteful for many small ones.',
+    ts:'Everyone gets access, nobody gets concurrency. It is a queue with good manners, not an isolation boundary.',
+    mps:'The best packing when tenants cooperate. The boundaries are soft, so choosing MPS is a trust decision as much as a performance one.',
+    mig:'A real hardware boundary you can sell to a tenant who doesn\'t trust you. The price is fixed shapes, so capacity strands the moment demand shifts.'
+  };
+
+  let tenants = [];
+  let mode = 'mig';
+  let preset = 'Mixed team';
+  let tick = 0, phase = 0, playing = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const $ = id => document.getElementById(id);
+  const letter = i => String.fromCharCode(65 + i);
+  const pct = x => Math.round(Math.max(0, x) * 100) + '%';
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const names = arr => arr.map(x => x.name).join(', ');
+
+  function loadPreset(name){
+    preset = name;
+    tenants = PRESETS[name].map(p => ({m:p.m, c:p.c, b:p.b}));
+    renderTenants(); renderPresets(); render();
+  }
+
+  function live(){
+    return tenants.map((tn, i) => {
+      const base = tn.c / 100;
+      const c = tn.b ? clamp(base * (1 + 0.8 * Math.sin(phase * 0.9 + i * 1.7)), 0.02, 1) : base;
+      return {i, name:'Tenant ' + letter(i), short:letter(i), color:COLORS[i % COLORS.length], m:tn.m, cBase:base, c, b:tn.b};
+    });
+  }
+
+  function sharedPool(L){
+    let used = 0; const run = [], oom = [];
+    L.forEach(x => { if (used + x.m <= GPU_MEM){ used += x.m; run.push(x); } else oom.push(x); });
+    return {run, oom, used};
+  }
+
+  function base(){ return {util:0, idle:1, stranded:0, unalloc:0, run:[], queued:[], oom:[], got:{}, memUsed:0}; }
+
+  function modelWhole(L){
+    const r = base();
+    if (!L.length) return r;
+    const f = L[0];
+    r.queued = L.slice(1);
+    if (f.m > GPU_MEM){ r.oom = [f]; return r; }
+    r.run = [f]; r.got[f.i] = Math.min(f.c, 1); r.util = r.got[f.i]; r.idle = 1 - r.util; r.memUsed = f.m;
+    return r;
+  }
+  function modelTS(L){
+    const r = base(); const p = sharedPool(L);
+    r.run = p.run; r.oom = p.oom; r.memUsed = p.used;
+    const n = r.run.length; if (!n) return r;
+    r.overhead = n > 1 ? Math.min(0.2, 0.03 * (n - 1)) : 0;
+    const avg = r.run.reduce((a, x) => a + Math.min(x.c, 1), 0) / n;
+    r.util = avg * (1 - r.overhead); r.idle = 1 - r.util; r.n = n;
+    r.run.forEach(x => { r.got[x.i] = Math.min(x.c, 1) / n * (1 - r.overhead); });
+    return r;
+  }
+  function modelMPS(L){
+    const r = base(); const p = sharedPool(L);
+    r.run = p.run; r.oom = p.oom; r.memUsed = p.used;
+    const D = r.run.reduce((a, x) => a + x.c, 0); r.D = D; r.contention = D > 1;
+    r.run.forEach(x => { r.got[x.i] = D > 1 ? x.c / D * 0.98 : x.c * 0.98; });
+    r.util = Math.min(0.98, D * 0.98); r.idle = 1 - r.util;
+    return r;
+  }
+  function modelMIG(L){
+    const r = base(); r.inst = []; r.throttled = [];
+    let freeS = SLICES, freeM = GPU_MEM;
+    L.forEach(x => {
+      const needS = Math.max(1, Math.ceil(x.cBase * SLICES - 1e-9));
+      const prof = PROFILES.find(p => p.s >= needS && p.mem >= x.m);
+      if (!prof){ r.oom.push(x); return; }
+      if (prof.s > freeS){ r.queued.push(Object.assign({}, x, {prof, why:'no compute slices left for a ' + prof.name})); return; }
+      if (prof.mem > freeM){ r.queued.push(Object.assign({}, x, {prof, why:'no memory slices left for a ' + prof.name})); return; }
+      freeS -= prof.s; freeM -= prof.mem;
+      const cap = prof.s / SLICES, g = Math.min(x.c, cap);
+      r.got[x.i] = g; r.inst.push({x, prof, cap, g});
+      if (x.c > cap + 1e-9) r.throttled.push(x);
+    });
+    r.run = r.inst.map(o => o.x);
+    r.util = r.inst.reduce((a, o) => a + o.g, 0);
+    r.stranded = r.inst.reduce((a, o) => a + (o.cap - o.g), 0);
+    r.unalloc = freeS / SLICES; r.freeS = freeS; r.freeM = freeM;
+    r.idle = r.stranded + r.unalloc;
+    r.memUsed = GPU_MEM - freeM;
+    return r;
+  }
+  const MODEL = {whole:modelWhole, ts:modelTS, mps:modelMPS, mig:modelMIG};
+
+  function risks(id, r, L){
+    const out = [];
+    const anyBursty = L.some(x => x.b);
+    if (id === 'whole'){
+      if (r.oom.length) out.push({t:names(r.oom) + ' needs more memory than one card has.', bad:true});
+      if (r.queued.length) out.push({t:r.queued.length + ' tenant' + (r.queued.length > 1 ? 's are' : ' is') + ' waiting for a card of their own.', bad:true});
+      if (r.run.length && r.idle > 0.4) out.push({t:pct(r.idle) + ' of the card sits idle because one tenant can\'t fill it.'});
+    }
+    if (id === 'ts'){
+      if (r.oom.length) out.push({t:'Out of memory: ' + names(r.oom) + ' can\'t allocate. Nothing stops one tenant from using the whole pool.', bad:true});
+      if (r.n > 1) out.push({t:'Each tenant runs one turn in ' + r.n + ', so response time stretches roughly ' + r.n + '×.'});
+      if (r.run.length && r.idle > 0.5) out.push({t:'Small kernels leave most of the GPU idle during every turn.'});
+    }
+    if (id === 'mps'){
+      if (r.oom.length) out.push({t:'Out of memory: ' + names(r.oom) + ' doesn\'t fit in the shared pool.', bad:true});
+      if (r.contention) out.push({t:'Demand is ' + r.D.toFixed(2) + '× the card, so tenants squeeze each other' + (anyBursty ? ', and a burst takes compute from everyone.' : '.'), bad:anyBursty});
+      if (r.run.length > 1) out.push({t:'Limits live in software. Fine inside one team, risky across tenants who don\'t trust each other.'});
+    }
+    if (id === 'mig'){
+      if (r.oom.length) out.push({t:names(r.oom) + ' is too big for any MIG shape.', bad:true});
+      r.queued.forEach(q => out.push({t:q.name + ' is queued: ' + q.why + '.', bad:true}));
+      if (r.throttled.length) out.push({t:names(r.throttled) + ' hit the ceiling of ' + (r.throttled.length > 1 ? 'their slices' : 'its slice') + ' during a burst.'});
+      if (r.stranded > 0.08) out.push({t:pct(r.stranded) + ' of the GPU is reserved but unused, stranded inside fixed slices.'});
+    }
+    return out;
+  }
+
+  /* ---------- rendering ---------- */
+  function renderPresets(){
+    $('presets').innerHTML = Object.keys(PRESETS).map(n =>
+      '<button type="button" class="chip" aria-pressed="' + (n === preset) + '" data-p="' + n + '">' + n + '</button>').join('');
+  }
+  function renderModes(){
+    $('modes').innerHTML = MODES.map(m =>
+      '<button type="button" role="tab" class="mode" id="tab-' + m.id + '" aria-selected="' + (m.id === mode) + '" data-m="' + m.id + '">' + m.label + '</button>').join('');
+  }
+  function renderTenants(){
+    $('tenantList').innerHTML = tenants.map((tn, i) => {
+      const n = 'Tenant ' + letter(i);
+      return '<div class="tenant" data-i="' + i + '">' +
+        '<div class="thead"><span class="swatch" style="background:' + COLORS[i % COLORS.length] + '"></span><b>' + n + '</b>' +
+        '<label class="burst"><input type="checkbox" data-k="b"' + (tn.b ? ' checked' : '') + '> bursty</label>' +
+        '<button type="button" class="rm" data-rm="' + i + '" aria-label="Remove ' + n + '">✕</button></div>' +
+        '<label class="slider">Memory <output>' + tn.m + ' GB</output><input type="range" min="1" max="80" value="' + tn.m + '" data-k="m" aria-label="' + n + ' memory"></label>' +
+        '<label class="slider">Compute demand <output>' + tn.c + '%</output><input type="range" min="1" max="100" value="' + tn.c + '" data-k="c" aria-label="' + n + ' compute demand"></label>' +
+        '</div>';
+    }).join('') || '<p class="hint">No tenants yet. Add one to see the GPU fill up.</p>';
+    $('addBtn').disabled = tenants.length >= 7;
+  }
+
+  function cellsHTML(kinds){
+    // kinds: array in fill order (column by column, bottom to top); convert to visual order for column-flow grid
+    const cols = kinds.length / 10, out = [];
+    for (let c = 0; c < cols; c++){
+      for (let row = 0; row < 10; row++){
+        const k = kinds[c * 10 + (9 - row)];
+        out.push(cellHTML(k));
+      }
+    }
+    return out.join('');
+  }
+  function cellHTML(k){
+    if (!k || k.t === 'idle') return '<div class="cell"></div>';
+    if (k.t === 'free') return '<div class="cell free"></div>';
+    if (k.t === 'stranded') return '<div class="cell" style="background:repeating-linear-gradient(45deg,' + k.c + '55 0 2px,transparent 2px 5px)"></div>';
+    return '<div class="cell" style="background:' + k.c + '"></div>';
+  }
+  function group(cols, kinds, cls, tag){
+    return '<div class="grp ' + (cls || '') + '" style="flex:' + cols + ' 1 0;grid-template-columns:repeat(' + cols + ',minmax(0,1fr))">' +
+      (tag ? '<span class="tag">' + tag + '</span>' : '') + cellsHTML(kinds) + '</div>';
+  }
+  function fillSequential(L, r){
+    const kinds = new Array(CELLS).fill(null); let p = 0;
+    L.forEach(x => { const n = Math.round((r.got[x.i] || 0) * CELLS); for (let j = 0; j < n && p < CELLS; j++) kinds[p++] = {t:'used', c:x.color}; });
+    return kinds;
+  }
+
+  function renderStage(L, r){
+    const die = $('die'), tl = $('tlWrap');
+    tl.innerHTML = '';
+    let cap = 'One GPU, 80 GB';
+    if (mode === 'whole'){
+      die.innerHTML = group(7, fillSequential(L, r), '', '');
+      cap = r.run.length ? 'Owned by ' + r.run[0].name + (r.queued.length ? ', ' + r.queued.length + ' waiting' : '') : 'Empty';
+    } else if (mode === 'mps'){
+      die.innerHTML = group(7, fillSequential(L, r), '', '');
+      cap = r.run.length + ' tenant' + (r.run.length === 1 ? '' : 's') + ' running at the same time';
+    } else if (mode === 'ts'){
+      const n = r.run.length;
+      const cur = n ? r.run[tick % n] : null;
+      const kinds = new Array(CELLS).fill(null);
+      if (cur){ const k = Math.round(Math.min(cur.c, 1) * (1 - (r.overhead || 0)) * CELLS); for (let j = 0; j < k; j++) kinds[j] = {t:'used', c:cur.color}; }
+      die.innerHTML = group(7, kinds, '', '');
+      cap = cur ? 'Now running: ' + cur.name + (n > 1 ? ', ' + (n - 1) + ' waiting their turn' : '') : 'Empty';
+      if (n){
+        let s = '';
+        for (let k = 0; k < 18; k++){
+          const idx = ((tick - 17 + k) % n + n) % n, x = r.run[idx];
+          s += '<div class="slot' + (k === 17 ? ' now' : '') + '" title="' + x.name + '"><i style="height:' + Math.round(Math.min(x.c, 1) * 100) + '%;background:' + x.color + '"></i></div>';
+        }
+        tl.innerHTML = '<div class="timeline" aria-hidden="true">' + s + '</div><div class="tl-cap">Recent turns. Bar height is how much of the GPU each turn actually used.</div>';
+      }
+    } else if (mode === 'mig'){
+      let html = '';
+      r.inst.forEach(o => {
+        const kinds = []; const used = Math.round(o.g * CELLS), total = o.prof.s * 10;
+        for (let j = 0; j < total; j++) kinds.push(j < used ? {t:'used', c:o.x.color} : {t:'stranded', c:o.x.color});
+        html += group(o.prof.s, kinds, 'hw', o.x.short + ' ' + o.prof.name);
+      });
+      if (r.freeS > 0) html += group(r.freeS, new Array(r.freeS * 10).fill({t:'free'}), 'free', 'unallocated');
+      die.innerHTML = html;
+      cap = r.inst.length + ' hardware instance' + (r.inst.length === 1 ? '' : 's') + (r.queued.length ? ', ' + r.queued.length + ' queued' : '');
+    }
+    $('gpuCap').textContent = cap;
+  }
+
+  function renderMem(L, r){
+    const bar = $('membar'); let s = '', label = [];
+    const seg = (w, bg, title) => '<span title="' + title + '" style="width:' + (w / GPU_MEM * 100) + '%;background:' + bg + '"></span>';
+    if (mode === 'mig'){
+      r.inst.forEach(o => {
+        s += seg(o.x.m, o.x.color, o.x.name + ' uses ' + o.x.m + ' GB');
+        if (o.prof.mem > o.x.m) s += seg(o.prof.mem - o.x.m, 'repeating-linear-gradient(45deg,' + o.x.color + '55 0 2px,transparent 2px 5px)', o.x.name + ' reserved but unused');
+        label.push(o.x.short + ': ' + o.x.m + '/' + o.prof.mem + ' GB');
+      });
+      $('memCap').textContent = r.memUsed + ' GB partitioned, ' + (GPU_MEM - r.memUsed) + ' GB free';
+    } else {
+      r.run.forEach(x => { s += seg(x.m, x.color, x.name + ' uses ' + x.m + ' GB'); });
+      const over = r.oom.reduce((a, x) => a + x.m, 0);
+      $('memCap').textContent = r.memUsed + ' GB used' + (over ? ', ' + over + ' GB didn\'t fit' : '') + (mode === 'whole' ? '' : ', one shared pool');
+    }
+    bar.innerHTML = s;
+    bar.setAttribute('aria-label', 'Memory: ' + $('memCap').textContent);
+  }
+
+  function renderReadouts(L, r){
+    const waitN = r.queued.length + r.oom.length;
+    let wasteSub = mode === 'mig' ? pct(r.stranded) + ' stranded in slices, ' + pct(r.unalloc) + ' unallocated' : 'compute nobody is using';
+    let extra;
+    if (mode === 'ts') extra = {k:'Turn-taking', v:(r.n || 0) + '×', s:'slower response per tenant'};
+    else if (mode === 'mps') extra = {k:'Demand vs card', v:(r.D || 0).toFixed(2) + '×', s:r.contention ? 'contention, tenants squeeze each other' : 'fits, with room to spare'};
+    else extra = {k:'Tenants running', v:r.run.length + '/' + L.length, s:waitN ? waitN + ' waiting or rejected' : 'everyone placed'};
+    const cards = [
+      {k:'GPU utilization', v:pct(r.util), s:'of total compute doing work'},
+      {k:'Wasted capacity', v:pct(Math.min(1, r.idle)), s:wasteSub},
+      extra
+    ];
+    $('readouts').innerHTML = cards.map(c => '<div class="ro"><div class="k">' + c.k + '</div><div class="v">' + c.v + '</div><div class="s">' + c.s + '</div></div>').join('');
+  }
+
+  function renderIso(){
+    const i = ISO[mode];
+    const row = (lab, a) => '<span>' + lab + '</span><span class="lvl ' + a[0] + '">' + a[0] + '</span><span class="why">' + a[1] + '</span>';
+    $('iso').innerHTML = row('Memory limits', i.mem) + row('Performance isolation', i.perf) + row('Fault isolation', i.fault);
+  }
+
+  function renderCompare(L){
+    let h = '<thead><tr><th>Mode</th><th>Utilization</th><th>Running</th><th>Wasted</th><th>Memory / perf / fault</th><th>Watch out for</th></tr></thead><tbody>';
+    MODES.forEach(m => {
+      const r = MODEL[m.id](L), rk = risks(m.id, r, L), iso = ISO[m.id];
+      h += '<tr class="' + (m.id === mode ? 'sel' : '') + '"><td><b>' + m.label + '</b></td><td class="num">' + pct(r.util) + '</td><td class="num">' + r.run.length + '/' + L.length + '</td><td class="num">' + pct(Math.min(1, r.idle)) + '</td><td>' + iso.mem[0] + ' / ' + iso.perf[0] + ' / ' + iso.fault[0] + '</td><td>' + (rk[0] ? rk[0].t : 'Nothing major for this mix.') + '</td></tr>';
+    });
+    $('cmp').innerHTML = h + '</tbody>';
+  }
+
+  function render(){
+    const L = live();
+    const r = MODEL[mode](L);
+    $('promise').textContent = PROMISE[mode];
+    renderStage(L, r); renderMem(L, r); renderReadouts(L, r); renderIso();
+    const rk = risks(mode, r, L);
+    $('risks').innerHTML = rk.map(x => '<li class="' + (x.bad ? 'bad' : '') + '">' + x.t + '</li>').join('');
+    $('insight').textContent = INSIGHT[mode];
+    renderCompare(L);
+  }
+
+  /* ---------- events ---------- */
+  $('presets').addEventListener('click', e => { const b = e.target.closest('[data-p]'); if (b) loadPreset(b.dataset.p); });
+  $('modes').addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b) return; mode = b.dataset.m; renderModes(); render(); });
+  $('modes').addEventListener('keydown', e => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const idx = MODES.findIndex(m => m.id === mode), n = MODES.length;
+    mode = MODES[(idx + (e.key === 'ArrowRight' ? 1 : n - 1)) % n].id;
+    renderModes(); render(); $('tab-' + mode).focus();
+  });
+  $('tenantList').addEventListener('input', e => {
+    const row = e.target.closest('.tenant'); if (!row) return;
+    const i = +row.dataset.i, k = e.target.dataset.k;
+    if (k === 'm' || k === 'c'){
+      tenants[i][k] = +e.target.value;
+      e.target.previousElementSibling.textContent = k === 'm' ? e.target.value + ' GB' : e.target.value + '%';
+    } else if (k === 'b') tenants[i].b = e.target.checked;
+    preset = ''; renderPresets(); render();
+  });
+  $('tenantList').addEventListener('click', e => {
+    const b = e.target.closest('[data-rm]'); if (!b) return;
+    tenants.splice(+b.dataset.rm, 1); preset = ''; renderTenants(); renderPresets(); render();
+  });
+  $('addBtn').addEventListener('click', () => {
+    if (tenants.length >= 7) return;
+    tenants.push({m:10, c:15, b:false}); preset = ''; renderTenants(); renderPresets(); render();
+  });
+  const playBtn = $('playBtn');
+  function syncPlay(){ playBtn.textContent = playing ? 'Pause bursts' : 'Play bursts'; playBtn.setAttribute('aria-pressed', String(playing)); }
+  playBtn.addEventListener('click', () => { playing = !playing; syncPlay(); });
+
+  setInterval(() => { if (!playing) return; tick++; phase += 0.6; render(); }, 700);
+
+  renderModes(); syncPlay(); loadPreset('Mixed team');
+})();
+</script>
+</body>
+</html>
