@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GPU visualizers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#eef1f4;--panel:#fff;--ink:#1b2433;--muted:#5d6878;--line:#c9d1db;--trace:#dde3ea;--copper:#b06a2c;color-scheme:light;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--paper:#10151d;--panel:#171e28;--ink:#e7ecf2;--muted:#98a3b3;--line:#2d3845;--trace:#1b2330;--copper:#d88b4a;color-scheme:dark}}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;line-height:1.5;
+background-image:linear-gradient(var(--trace) 1px,transparent 1px),linear-gradient(90deg,var(--trace) 1px,transparent 1px);background-size:32px 32px}
+.wrap{max-width:860px;margin:0 auto;padding:40px 16px 56px}
+h1{font-family:'Barlow Condensed','Arial Narrow',sans-serif;font-weight:700;font-size:clamp(2.4rem,6vw,3.6rem);line-height:.95;margin:0 0 10px}
+.lede{color:var(--muted);font-size:1.08rem;max-width:60ch;margin:0 0 28px}
+.tool{display:block;background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--copper);border-radius:6px;padding:16px 18px;margin-bottom:12px;color:inherit;text-decoration:none}
+.tool:hover{border-color:var(--ink)}
+.tool:focus-visible{outline:2px solid var(--copper);outline-offset:2px}
+.tool h2{font-family:'Barlow Condensed','Arial Narrow',sans-serif;font-weight:600;font-size:1.5rem;margin:0 0 2px}
+.tool p{margin:0;color:var(--muted)}
+.soon{border-left-color:var(--line);opacity:.7}
+footer{margin-top:28px;color:var(--muted);font-size:.88rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>GPU visualizers</h1>
+  <p class="lede">Small interactive tools that explain how GPU infrastructure actually behaves. Change the inputs, watch the tradeoffs play out.</p>
+
+  <a class="tool" href="multi-tenancy/">
+    <h2>Four ways to share one GPU</h2>
+    <p>Whole card, time-slicing, MPS and MIG, side by side. See utilization, stranded capacity, and what each mode really isolates.</p>
+  </a>
+
+  <div class="tool soon">
+    <h2>More coming</h2>
+    <p>Utilization and own-vs-rent economics, topology-aware placement, tail latency, and KV-cache memory pressure.</p>
+  </div>
+
+  <footer>Simplified teaching models based on public documentation, not benchmarks. Built by Meet Andani, companion to the #ZeroToGPU and #GPUtoPlatform series on LinkedIn.</footer>
+</div>
+</body>
+</html>
