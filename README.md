@@ -2,7 +2,7 @@
 
 Small interactive tools that explain how GPU infrastructure actually behaves. Companion to the **#ZeroToGPU** and **#GPUtoPlatform** series on LinkedIn.
 
-**Live:** https://<your-username>.github.io/gpu-visualizers/
+**Live:** https://andanimeet5511.github.io/gpu-visualizers/
 
 ## Tools
 
